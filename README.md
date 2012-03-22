@@ -29,6 +29,7 @@ thousand lines of lsl code in OpenCollar. (Before 3.7, there were 24,555 lines
 :( .)  
 
 It's a lot of work to maintain all that.  Still, it gets worse:
+
 - There are a lot of cross dependencies between the scripts.  Any work on the
   core scripts (auth, settings, listener, update) is quite likely to break
   things elsewhere.  
