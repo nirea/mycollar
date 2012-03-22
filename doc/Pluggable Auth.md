@@ -33,9 +33,9 @@ Example
 
 Suppose a collar had these auth scripts in it:
 
-mc-auth-00-owner
-mc-auth-10-blacklist
-mc-auth-20-some-gorean-sim
+1. mc-auth-00-owner
+2. mc-auth-10-blacklist
+3. mc-auth-20-some-gorean-sim
 
 The listener hears a "nadu" command.  It will use the AUTH_REQUEST channel to send a message to the 'mc-auth-00-owner' script (the first one in the list), which will check whether the sender is in the list of owners.  If so, then it will send a COMMAND message with the string "nadu" and the key of the person who sent the command.  The anim script will pick this up and play the anim.
 
