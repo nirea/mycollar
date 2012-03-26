@@ -52,7 +52,7 @@ key g_kUpdaterOrb;
 
 // We check for the latest version number by looking at the "~mc-version" notecard
 // inside the 'release' branch of the collar's Github repo.
-string version_check_url = "https://raw.github.com/nirea/ocupdater/release/lsl/~mc-version";
+string version_check_url = "https://raw.github.com/nirea/mycollar/release/lsl/~mc-version";
 key github_version_request;
 
 // A request to this URL will trigger delivery of an updater.  We omit the
@@ -65,7 +65,7 @@ key appengine_delivery_request;
 // static file on Github to keep server load down.  This script will remember
 // the date of the last time it reported news so it will only show things once.
 // It will also not show things more than a week old.
-string news_url = "https://raw.github.com/nirea/ocupdater/master/news.md";
+string news_url = "https://raw.github.com/nirea/mycollar/master/news.md";
 key news_request;
 
 // store versions as strings and don't cast to float until the last minute.
@@ -97,7 +97,7 @@ key ShortKey() {//just pick 8 random hex digits and pad the rest with 0.  Good e
         sOut += llGetSubString(sChars, iIndex, iIndex);
     }
 
-    return (key)(sOut + "-0000-0000-0000-000000000000");
+    return (key)(sOut);
 }
 
 key Dialog(key kRCPT, string sPrompt, list lChoices, list lUtilityButtons, integer iPage) {
@@ -370,4 +370,3 @@ default {
         }
     }
 }
-

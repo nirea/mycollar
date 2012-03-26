@@ -1,6 +1,47 @@
 // This script is an auth plugin.  This particular auth plugin checks whether
 // the command came from an owner or an object owned by an owner.
 
+
+string MCDATA_CARD = "~mc-server";
+string MCDATA_URL = ""; // URL of owner DB, loaded via optional ~mc-server notecard.
+key MCDATA_LINE_ID;
+// uuid of url card, so we can check for changes without having to read it.
+key MCDATA_CARD_ID = NULL_KEY;
+
+// this function is called on startup and on every inventory change
+CheckServerCard() {
+    // Check for server url card
+    if (llGetInventoryType(MCDATA_CARD) == INVENTORY_NOTECARD) {
+        key found_card_id = llGetInventoryKey(MCDATA_CARD);
+        if (MCDATA_CARD_ID != found_card_id) {
+            // found a server card but its uuid doesn't match what we remembered.  Store the new id and re-read.
+            MCDATA_CARD_ID = found_card_id;
+            MCDATA_LINE_ID = llGetNotecardLine(MCDATA_CARD, 0);
+        }
+    } else if (MCDATA_URL != "") {
+        // there's no server card, but we have a url, which means the card must have just been removed.  Forget the url.
+        MCDATA_URL = "";
+        MCDATA_CARD_ID = NULL_KEY;
+    }
+}
+
+// Called on rez, and on getting a new server url from a notecard.
+RequestServerData() {
+    if (MCDATA_URL != "") {
+        string url = MCDATA_URL + "api/1/av/" + (string)llGetOwner() + "/";
+        // Don't bother storing the http request handle in a global var.  Instead, rely on the 1st-line header in the server's response to tell us what to do with the data.  Advantage: other scripts in the prim can listen in on the http_response event and get the data without needing a link message.
+        llHTTPRequest(url, [], "");
+    }
+}
+        
+SaveServerData() {
+    if (MCDATA_URL != "") {
+        string url = MCDATA_URL + "api/1/av/" + (string)llGetOwner() + "/";
+        string data = "owners=" + llDumpList2String(owners, ",");
+        llHTTPRequest(url, [HTTP_METHOD, "PUT"], data);
+    }
+}
+
 //MC MESSAGE MAP
 integer DOMENU = -800;
 integer MC_BTN_CLICK = -12000;
@@ -62,6 +103,7 @@ AddOwner(key id, string name) {
     }
     string msg = name + " is now an owner on " + llKey2Name(llGetOwner()) + "'s collar.";
     Notify(id, msg, TRUE);
+    SaveServerData();
 }
 
 RemOwner(key id, key user) {
@@ -70,7 +112,8 @@ RemOwner(key id, key user) {
         string name = llList2String(owners, idx + 1);
         owners = llDeleteSubList(owners, idx, idx + 1);
         string msg = name + " is no longer an owner on " + llKey2Name(llGetOwner()) + "'s collar.";
-        Notify(user, msg, TRUE);        
+        Notify(user, msg, TRUE);
+        SaveServerData();
     }
 }
 
@@ -315,31 +358,69 @@ default
 
     state_entry() {
         AUTH_INDEX = GetAuthIndex();
+
+        CheckServerCard();
+    }
+
+    dataserver(key id, string data) {
+        if (id == MCDATA_LINE_ID) {
+            MCDATA_URL = data;
+            RequestServerData();
+        }
+    }
+            
+    on_rez(integer num) {
+        RequestServerData();
     }
 
     changed(integer change) {
         if (change & CHANGED_INVENTORY) {
+            // refresh auth index
             AUTH_INDEX = GetAuthIndex();
+            
+            // see if server url card changed
+            CheckServerCard();
         }
     }
         
     http_response(key id, integer status, list meta, string body) {
         if (id == keyrequest && status == 200) {
+            // handle name2key responses
+            // name2key will return a 405 Method Not Allowed error response code if lookup fails            
             list parts = llParseString2List(body, [":"], []);
             string name = llList2String(parts, 0);
             key av = (key)llList2String(parts, 1);
             AddOwner(av, name);
-            // name2key will return an error response code if lookup fails:
-
-            // curl -I http://name2key.appspot.com/?name=nirea%20residen
-            // HTTP/1.1 405 Method Not Allowed
-            // Content-Type: text/html; charset=utf-8
-            // Cache-Control: no-cache
-            // Expires: Fri, 01 Jan 1990 00:00:00 GMT
-            // Date: Sun, 18 Mar 2012 04:54:33 GMT
-            // Server: Google Frontend
-            // Content-Length: 0
-
+        } else {
+            // we may have gotten a mcdata response.  check first line to be sure.
+            list lines = llParseString2List(body, ["\n"], []);
+            if (llList2String(lines, 0) == "MCDATA " + (string)llGetOwner()) {
+                // it's an mcdata response about *this* av!
+                // lop off the header line
+                lines = llDeleteSubList(lines, 0, 0);
+                // loop over the rest
+                integer n;
+                integer stop = llGetListLength(lines);
+                for (n = 0; n < stop; n++) {
+                    // parse "key=val"
+                    list parts = llParseString2List(llList2String(lines, n), ["="], []);
+                    if (llList2String(parts, 0) == "owners") {
+                        // we got a comma-delimited 2-strided list of owner keys and names.  The keys need to be 
+                        // turned into real keys instead of just strings.
+                        // clear existing owner data
+                        owners = [];
+                        // loop over and save the new data
+                        list ownerdata = llParseString2List(llList2String(parts, 1), [","], []);
+                        integer m;
+                        integer stopm = llGetListLength(ownerdata);
+                        for (m = 0; m < stopm; m += 2) {
+                            key owner = (key)llList2String(ownerdata, m);
+                            string name = llList2String(ownerdata, m + 1);
+                            owners += [owner, name];
+                        }
+                    }
+                }
+            }
         }
     }
     
@@ -365,4 +446,3 @@ default
         OwnerMenu(sensor_rcpt);
     }
 }
-
